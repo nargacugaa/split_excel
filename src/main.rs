@@ -1,10 +1,9 @@
 use calamine::{open_workbook, Reader, Xlsx};
-use chrono::NaiveDate;
-use rust_xlsxwriter::Workbook;
+use rust_xlsxwriter::{Format, Workbook};
 use std::borrow::Borrow;
 use std::error::Error;
-use std::{fs, io};
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 fn split_excel_file(
     input_file: &str,
@@ -37,6 +36,9 @@ fn split_excel_file(
         let mut new_workbook = Workbook::new();
         let new_worksheet = new_workbook.add_worksheet();
 
+        // 设置列宽为 15 个字符
+        new_worksheet.set_column_width(6, 11)?;
+
         // 写入第一行数据
         for (col, cell) in first_row.iter().enumerate() {
             new_worksheet.write_string(0, col as u16, cell.to_string())?;
@@ -65,15 +67,25 @@ fn split_excel_file(
                     calamine::Data::Empty => "".to_string(),
                     calamine::Data::DateTime(excel_time) => {
                         let serial = excel_time.as_f64();
-                        let date = NaiveDate::from_ymd_opt(1899, 12, 31)
-                            .and_then(|base_date| {
-                                base_date.checked_add_signed(chrono::Duration::days(
-                                    (serial - 1.0).floor() as i64,
-                                ))
-                            })
-                            .expect("Failed to convert Excel date to NaiveDate");
+                        let excel_datetime =
+                            rust_xlsxwriter::ExcelDateTime::from_serial_datetime(serial)?;
+                        // let date = NaiveDate::from_ymd_opt(1899, 12, 31)
+                        //     .and_then(|base_date| {
+                        //         base_date.checked_add_signed(chrono::Duration::days(
+                        //             (serial - 1.0).floor() as i64,
+                        //         ))
+                        //     })
+                        //     .expect("Failed to convert Excel date to NaiveDate");
                         // 使用转换后的日期
-                        date.format("%Y/%m/%d").to_string()
+                        // date.format("%Y/%m/%d").to_string()
+
+                        new_worksheet.write_datetime_with_format(
+                            new_start_row as u32,
+                            col as u16,
+                            excel_datetime,
+                            &Format::new().set_num_format("yyyy/mm/dd"),
+                        )?;
+                        continue;
                     }
                     calamine::Data::DateTimeIso(_) => panic!("DateTimeIso is not supported"),
                     calamine::Data::DurationIso(_) => panic!("DurationIso is not supported"),
@@ -87,11 +99,10 @@ fn split_excel_file(
         let output_file = format!("{}_{:03}.xlsx", output_prefix, file_index);
         new_workbook.save(Path::new(&output_file))?;
 
-
         // 新Excel从第0行开始
         new_start_row = 1;
 
-        println!("已拆分为：{} 个Excel",file_index);
+        println!("已拆分为：{} 个Excel", file_index);
 
         if current_row >= range.height() {
             break;
@@ -147,35 +158,34 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 
-// 使用终端原始模式 未尝试
-//     use crossterm::{
-//     event::{read, Event, KeyCode},
-//     execute,
-//     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-// };
-// use std::io::{self, Write};
+    // 使用终端原始模式 未尝试
+    //     use crossterm::{
+    //     event::{read, Event, KeyCode},
+    //     execute,
+    //     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    // };
+    // use std::io::{self, Write};
 
-// fn main() -> crossterm::Result<()> {
-//     // 启用终端的原始模式
-//     enable_raw_mode()?;
+    // fn main() -> crossterm::Result<()> {
+    //     // 启用终端的原始模式
+    //     enable_raw_mode()?;
 
-//     // 你的程序逻辑
-//     println!("Hello, world!");
+    //     // 你的程序逻辑
+    //     println!("Hello, world!");
 
-//     // 程序执行完毕，等待用户按键
-//     println!("Press any key to continue...");
+    //     // 程序执行完毕，等待用户按键
+    //     println!("Press any key to continue...");
 
-//     // 循环等待按键事件
-//     loop {
-//         if let Event::Key(_) = read()? {
-//             break;
-//         }
-//     }
+    //     // 循环等待按键事件
+    //     loop {
+    //         if let Event::Key(_) = read()? {
+    //             break;
+    //         }
+    //     }
 
-//     // 禁用原始模式
-//     disable_raw_mode()?;
+    //     // 禁用原始模式
+    //     disable_raw_mode()?;
 
-//     Ok(())
-// }
-
+    //     Ok(())
+    // }
 }
