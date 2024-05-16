@@ -1,6 +1,7 @@
 use calamine::{open_workbook, Reader, Xlsx};
 use chrono::NaiveDate;
 use rust_xlsxwriter::Workbook;
+use std::borrow::Borrow;
 use std::error::Error;
 use std::{fs, io};
 use std::path::{Path, PathBuf};
@@ -12,14 +13,21 @@ fn split_excel_file(
 ) -> Result<(), Box<dyn Error>> {
     let mut workbook: Xlsx<_> = open_workbook(input_file)?;
 
+    // 获取第一个Sheet的名字
+    let binding = workbook.borrow().sheet_names();
+    let sheet_name = binding.get(0).ok_or("No sheets available")?;
+
     // 使用 match 处理可能的错误
-    let range = match workbook.worksheet_range("Sheet1") {
+    let range = match workbook.worksheet_range(sheet_name) {
         Ok(r) => r,
         Err(_) => return Err(Box::from("Cannot find 'Sheet1'")),
     };
 
+    // 原excel的当前行
     let mut current_row = 1;
+    // 新excel的当前行
     let mut new_start_row = 1;
+    // 拆分的文件序号
     let mut file_index = 1;
 
     // 提取第一行数据
@@ -31,31 +39,20 @@ fn split_excel_file(
 
         // 写入第一行数据
         for (col, cell) in first_row.iter().enumerate() {
-            let value = match cell {
-                calamine::Data::Int(i) => i.to_string(),
-                calamine::Data::Float(f) => f.to_string(),
-                calamine::Data::String(s) => s.clone(),
-                calamine::Data::Bool(b) => {
-                    if *b {
-                        "TRUE".to_string()
-                    } else {
-                        "FALSE".to_string()
-                    }
-                }
-                calamine::Data::Error(e) => e.to_string(),
-                calamine::Data::Empty => "".to_string(),
-                calamine::Data::DateTime(_) => panic!("DateTimeIso is not supported"),
-                calamine::Data::DateTimeIso(_) => panic!("DateTimeIso is not supported"),
-                calamine::Data::DurationIso(_) => panic!("DurationIso is not supported"),
-            };
-            new_worksheet.write_string(0, col as u16, &value)?;
+            new_worksheet.write_string(0, col as u16, cell.to_string())?;
         }
 
         for row in range.rows().skip(current_row).take(rows_per_file) {
             for (col, cell) in row.iter().enumerate() {
                 let value = match cell {
-                    calamine::Data::Int(i) => i.to_string(),
-                    calamine::Data::Float(f) => f.to_string(),
+                    calamine::Data::Int(i) => {
+                        new_worksheet.write_number(new_start_row as u32, col as u16, *i as f64)?;
+                        continue;
+                    }
+                    calamine::Data::Float(f) => {
+                        new_worksheet.write_number(new_start_row as u32, col as u16, *f)?;
+                        continue;
+                    }
                     calamine::Data::String(s) => s.clone(),
                     calamine::Data::Bool(b) => {
                         if *b {
