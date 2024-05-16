@@ -1,0 +1,9 @@
+[package]
+name = "split_excel"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+calamine = "0.24"
+rust_xlsxwriter = "0.64.2"
+chrono = "0.4.38"
